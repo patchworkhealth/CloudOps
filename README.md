@@ -1,2 +1,2 @@
 # CloudOps
-A reverse-engineered existing repository for Patchwork's cloud operations and provisioning.
+A reverse-engineered existing repository for Patchwork's cloud operations and provisioning using Pulumi.
