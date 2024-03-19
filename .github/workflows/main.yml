@@ -1,0 +1,22 @@
+name: PW PoR Metrics
+on: workflow_dispatch
+jobs:
+  evaluate-actions-consumption:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call workflow-runs action
+        uses: kittychiu/workflow-metrics@v0.4.7
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER_NAME: "patchworkhealth"
+          REPO_NAME: "PatchworkOnRails"
+          START_DATE: "2024-02-01"
+          END_DATE: "2024-02-10"
+
+      - name: Upload all .txt .csv .md files to artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: workflow-stats
+          path: |
+            workflow-stats.csv
+            runs.json
