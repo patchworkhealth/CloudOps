@@ -27,8 +27,47 @@ repository = aws.ecr.Repository("qxglobal_dashboard", name="qxglobal_dashboard",
     "scanOnPush": True,
 })
 
-# Create ECS Cluster
-cluster = aws.ecs.Cluster("qxglobal_dashboard", name="qxglobal_dashboard")
+# Create a new VPC
+vpc = aws.ec2.Vpc("pw-dashboard-vpc",
+    cidr_block="10.0.0.0/16",
+    enable_dns_support=True,
+    enable_dns_hostnames=True,
+)
+
+# Define ECS Cluster
+cluster = aws.ecs.Cluster("qxglobal_dashboard",
+    name="qxglobal_dashboard"
+)
+
+# Create a new security group for the VPC
+security_group = aws.ec2.SecurityGroup("pw-dashboard-security-group",
+    vpc_id=vpc.id,
+    description="Security group for pw-dashboard-vpc",
+    ingress=[
+        {
+            "protocol": "tcp",
+            "from_port": 80,
+            "to_port": 80,
+            "cidr_blocks": ["0.0.0.0/0"],
+        },
+        {
+            "protocol": "tcp",
+            "from_port": 443,
+            "to_port": 443,
+            "cidr_blocks": ["0.0.0.0/0"],
+        },
+    ],
+    egress=[{
+        "protocol": "-1",
+        "from_port": 0,
+        "to_port": 0,
+        "cidr_blocks": ["0.0.0.0/0"],
+    }],
+)
+
+#subnets = aws.ec2.get_subnets(vpc.id)
+subnets = aws.ec2.get_subnets(vpc.id[0])
+pulumi.export("subnets", subnets.ids)
 
 # Define Task Execution Role
 task_execution_role = aws.iam.Role("qxglobal_dashboard_task_execution_role",
@@ -71,6 +110,13 @@ task_definition = aws.ecs.TaskDefinition("qxglobal_dashboard_task",
             ]
         }}
     ]"""),
+)
+
+# Run Task in ECS Cluster
+service = aws.ecs.Service("qxglobal_dashboard_service",
+    cluster=cluster.arn,
+    task_definition=task_definition.arn,
+    desired_count=1,  # Number of tasks to run
 )
 
 # Output ECR Login Command
