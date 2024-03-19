@@ -1,0 +1,71 @@
+name: Weekly Retrospective Report
+
+on: 
+  schedule:
+    - cron: '0 12 * * 5'
+    
+jobs:
+  evaluate-actions-consumption:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OWNER_NAME: ${{ github.repository_owner }}
+
+    steps:
+      - name: Checkout workflow-names.txt
+        uses: actions/checkout@v3
+
+      - name: Set dates and repo name
+        run: |
+          echo "START_DATE=$(date -d '-1 month' +%Y-%m-%d)" >> "$GITHUB_ENV"
+          echo "END_DATE=$(date +%Y-%m-%d)" >> "$GITHUB_ENV"
+          
+          repo=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          echo "REPO_NAME=${repo}" >> $GITHUB_ENV
+
+      - name: Call workflow-runs action
+        uses: kittychiu/workflow-metrics@v0.4.7
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ env.REPO_NAME }}
+          START_DATE: ${{ env.START_DATE }}
+          END_DATE: ${{ env.END_DATE }}
+
+      - name: Convert workflow-stats.CSV to stats-table.md markdown table
+        run: |
+          echo -e "## Table View\n" > stats-table.md
+          header=$(head -n 1 workflow-stats.csv | sed 's/,/|/g' | sed 's/_/ /g')
+          echo -e "|${header}|" >> stats-table.md
+          metadata=$(head -n 1 workflow-stats.csv | sed 's/,/|/g' | sed 's/[^|]/-/g')
+          echo -e "|${metadata}|" >> stats-table.md
+          tail -n +2 workflow-stats.csv | sed 's/,/|/g; s/^/|/; s/$/|/' >> stats-table.md
+
+      - name: Convert workflow-stats.CSV to stream-diagram.md mermaid diagram
+        run: |
+          echo -e "## Value Stream View\n" > stream-diagram.md
+          echo -e '```mermaid' >> stream-diagram.md
+          echo -e 'timeline' >> stream-diagram.md
+          head -n 1 workflow-stats.csv | sed 's/,/ : /g' | sed 's/_/ /g' | awk -F'|' '{for(i=1;i<=NF;i++) printf("%s%s", "    ", $i, i==NF?"\n":", ")}' | sed 's/^/  /' >> stream-diagram.md
+          tail -n +2 workflow-stats.csv | sed 's/,/ : /g' | awk -F'|' '{for(i=1;i<=NF;i++) printf("%s%s", "\n    ", $i, i==NF?"\n":", ")}' | sed 's/^/  /' >> stream-diagram.md
+          echo -e '\n```' >> stream-diagram.md
+
+      - name: Combine into issue content
+        run: |
+          echo "Combine output files"
+          cat stream-diagram.md stats-table.md > issue_view.md
+
+      - name: Publish content to a new GitHub Issue
+        uses: peter-evans/create-issue-from-file@v4
+        with:
+          title: Workflow runs summary `${{ env.REPO_NAME }}` repo (${{ env.START_DATE }} - ${{ env.END_DATE }})
+          content-filepath: issue_view.md
+
+      - name: Upload all .txt .csv .md files to artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: workflow-stats
+          path: |
+            stats-table.md
+            stream-diagram.md
+            workflow-stats.csv
+            runs.json
